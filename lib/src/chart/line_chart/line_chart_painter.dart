@@ -497,156 +497,94 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
       List<FlSpot> barSpots,
       PaintHolder<LineChartData> holder,
       {Path? appendToPath}) {
-    final path = appendToPath ?? Path();
-    final size = barSpots.length;
-
-    var temp = const Offset(0.0, 0.0);
-
     // カラーの指定が含まれる場合は分割する
-    if (barSpots.any((s) => s.color != null)) {
-      final List<List<FlSpot>> chunkedSpots = [];
-      var chunkedIndex = 0;
-      Color? previousColor;
-      barSpots.asMap().forEach((index, spot) {
-        if (index == 0) {
-          previousColor = spot.color;
-        }
-        // カラーに変化がない場合
-        if (previousColor == spot.color) {
-          return;
-        }
-        chunkedSpots.add(barSpots.sublist(chunkedIndex, index));
-        chunkedIndex = index;
+    final List<List<FlSpot>> chunkedSpots = [];
+    var chunkedIndex = 0;
+    Color? previousColor;
+    barSpots.asMap().forEach((index, spot) {
+      if (index == 0) {
         previousColor = spot.color;
-      });
+      }
+      // カラーに変化がない場合
+      if (previousColor == spot.color) {
+        return;
+      }
+      chunkedSpots.add(barSpots.sublist(
+        chunkedIndex > 0 ? chunkedIndex - 1 : chunkedIndex,
+        index,
+      ));
+      chunkedIndex = index;
+      previousColor = spot.color;
+    });
 
-      return chunkedSpots.map((spot) {
-        final x = getPixelX(barSpots[0].x, viewSize, holder);
-        final y = getPixelY(barSpots[0].y, viewSize, holder);
-        if (appendToPath == null) {
-          path.moveTo(x, y);
-        } else {
-          path.lineTo(x, y);
-        }
-        for (var i = 1; i < size; i++) {
-          /// CurrentSpot
-          final current = Offset(
-            getPixelX(barSpots[i].x, viewSize, holder),
-            getPixelY(barSpots[i].y, viewSize, holder),
-          );
+    return chunkedSpots.map((spots) {
+      final path = appendToPath ?? Path();
+      var temp = const Offset(0.0, 0.0);
+      final x = getPixelX(spots[0].x, viewSize, holder);
+      final y = getPixelY(spots[0].y, viewSize, holder);
+      if (appendToPath == null) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+      for (var i = 1; i < spots.length; i++) {
+        /// CurrentSpot
+        final current = Offset(
+          getPixelX(spots[i].x, viewSize, holder),
+          getPixelY(spots[i].y, viewSize, holder),
+        );
 
-          /// previous spot
-          final previous = Offset(
-            getPixelX(barSpots[i - 1].x, viewSize, holder),
-            getPixelY(barSpots[i - 1].y, viewSize, holder),
-          );
+        /// previous spot
+        final previous = Offset(
+          getPixelX(spots[i - 1].x, viewSize, holder),
+          getPixelY(spots[i - 1].y, viewSize, holder),
+        );
 
-          /// next point
-          final next = Offset(
-            getPixelX(barSpots[i + 1 < size ? i + 1 : i].x, viewSize, holder),
-            getPixelY(barSpots[i + 1 < size ? i + 1 : i].y, viewSize, holder),
-          );
+        /// next point
+        final next = Offset(
+          getPixelX(
+              spots[i + 1 < spots.length ? i + 1 : i].x, viewSize, holder),
+          getPixelY(
+              spots[i + 1 < spots.length ? i + 1 : i].y, viewSize, holder),
+        );
 
-          final controlPoint1 = previous + temp;
+        final controlPoint1 = previous + temp;
 
-          /// if the isCurved is false, we set 0 for smoothness,
-          /// it means we should not have any smoothness then we face with
-          /// the sharped corners line
-          final smoothness = barData.isCurved ? barData.curveSmoothness : 0.0;
-          temp = ((next - previous) / 2) * smoothness;
+        /// if the isCurved is false, we set 0 for smoothness,
+        /// it means we should not have any smoothness then we face with
+        /// the sharped corners line
+        final smoothness = barData.isCurved ? barData.curveSmoothness : 0.0;
+        temp = ((next - previous) / 2) * smoothness;
 
-          if (barData.preventCurveOverShooting) {
-            if ((next - current).dy <=
-                    barData.preventCurveOvershootingThreshold ||
-                (current - previous).dy <=
-                    barData.preventCurveOvershootingThreshold) {
-              temp = Offset(temp.dx, 0);
-            }
-
-            if ((next - current).dx <=
-                    barData.preventCurveOvershootingThreshold ||
-                (current - previous).dx <=
-                    barData.preventCurveOvershootingThreshold) {
-              temp = Offset(0, temp.dy);
-            }
+        if (barData.preventCurveOverShooting) {
+          if ((next - current).dy <=
+                  barData.preventCurveOvershootingThreshold ||
+              (current - previous).dy <=
+                  barData.preventCurveOvershootingThreshold) {
+            temp = Offset(temp.dx, 0);
           }
 
-          final controlPoint2 = current - temp;
-
-          path.cubicTo(
-            controlPoint1.dx,
-            controlPoint1.dy,
-            controlPoint2.dx,
-            controlPoint2.dy,
-            current.dx,
-            current.dy,
-          );
-        }
-        return ColorPath(path: path, color: spot.first.color);
-      }).toList();
-    }
-
-    final x = getPixelX(barSpots[0].x, viewSize, holder);
-    final y = getPixelY(barSpots[0].y, viewSize, holder);
-    if (appendToPath == null) {
-      path.moveTo(x, y);
-    } else {
-      path.lineTo(x, y);
-    }
-    for (var i = 1; i < size; i++) {
-      /// CurrentSpot
-      final current = Offset(
-        getPixelX(barSpots[i].x, viewSize, holder),
-        getPixelY(barSpots[i].y, viewSize, holder),
-      );
-
-      /// previous spot
-      final previous = Offset(
-        getPixelX(barSpots[i - 1].x, viewSize, holder),
-        getPixelY(barSpots[i - 1].y, viewSize, holder),
-      );
-
-      /// next point
-      final next = Offset(
-        getPixelX(barSpots[i + 1 < size ? i + 1 : i].x, viewSize, holder),
-        getPixelY(barSpots[i + 1 < size ? i + 1 : i].y, viewSize, holder),
-      );
-
-      final controlPoint1 = previous + temp;
-
-      /// if the isCurved is false, we set 0 for smoothness,
-      /// it means we should not have any smoothness then we face with
-      /// the sharped corners line
-      final smoothness = barData.isCurved ? barData.curveSmoothness : 0.0;
-      temp = ((next - previous) / 2) * smoothness;
-
-      if (barData.preventCurveOverShooting) {
-        if ((next - current).dy <= barData.preventCurveOvershootingThreshold ||
-            (current - previous).dy <=
-                barData.preventCurveOvershootingThreshold) {
-          temp = Offset(temp.dx, 0);
+          if ((next - current).dx <=
+                  barData.preventCurveOvershootingThreshold ||
+              (current - previous).dx <=
+                  barData.preventCurveOvershootingThreshold) {
+            temp = Offset(0, temp.dy);
+          }
         }
 
-        if ((next - current).dx <= barData.preventCurveOvershootingThreshold ||
-            (current - previous).dx <=
-                barData.preventCurveOvershootingThreshold) {
-          temp = Offset(0, temp.dy);
-        }
+        final controlPoint2 = current - temp;
+
+        path.cubicTo(
+          controlPoint1.dx,
+          controlPoint1.dy,
+          controlPoint2.dx,
+          controlPoint2.dy,
+          current.dx,
+          current.dy,
+        );
       }
-
-      final controlPoint2 = current - temp;
-
-      path.cubicTo(
-        controlPoint1.dx,
-        controlPoint1.dy,
-        controlPoint2.dx,
-        controlPoint2.dy,
-        current.dx,
-        current.dy,
-      );
-    }
-
-    return [ColorPath(path: path)];
+      return ColorPath(path: path, color: spots.first.color);
+    }).toList();
   }
 
   /// generates a `Step Line Chart` bar style path.
