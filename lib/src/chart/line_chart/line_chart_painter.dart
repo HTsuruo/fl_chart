@@ -210,25 +210,32 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     // because barData is the whole line
     // and bar is a piece of that line
     for (var bar in barList) {
-      final barPath = generateBarPath(viewSize, barData, bar, holder);
+      // spotsにカラーが設定されている場合
+      if (bar.any((s) => s.color != null)) {
+        final barPaths =
+            generateNormalColorBarPaths(viewSize, barData, bar, holder);
+        drawColorBars(canvasWrapper, barPaths, barData, holder);
+      } else {
+        final barPath = generateBarPath(viewSize, barData, bar, holder);
 
-      final belowBarPath =
-          generateBelowBarPath(viewSize, barData, barPath, bar, holder);
-      final completelyFillBelowBarPath = generateBelowBarPath(
-          viewSize, barData, barPath, bar, holder,
-          fillCompletely: true);
-      final aboveBarPath =
-          generateAboveBarPath(viewSize, barData, barPath, bar, holder);
-      final completelyFillAboveBarPath = generateAboveBarPath(
-          viewSize, barData, barPath, bar, holder,
-          fillCompletely: true);
+        final belowBarPath =
+            generateBelowBarPath(viewSize, barData, barPath, bar, holder);
+        final completelyFillBelowBarPath = generateBelowBarPath(
+            viewSize, barData, barPath, bar, holder,
+            fillCompletely: true);
+        final aboveBarPath =
+            generateAboveBarPath(viewSize, barData, barPath, bar, holder);
+        final completelyFillAboveBarPath = generateAboveBarPath(
+            viewSize, barData, barPath, bar, holder,
+            fillCompletely: true);
 
-      drawBelowBar(canvasWrapper, belowBarPath, completelyFillAboveBarPath,
-          holder, barData);
-      drawAboveBar(canvasWrapper, aboveBarPath, completelyFillBelowBarPath,
-          holder, barData);
-      drawBarShadow(canvasWrapper, barPath, barData);
-      drawBar(canvasWrapper, barPath, barData, holder);
+        drawBelowBar(canvasWrapper, belowBarPath, completelyFillAboveBarPath,
+            holder, barData);
+        drawAboveBar(canvasWrapper, aboveBarPath, completelyFillBelowBarPath,
+            holder, barData);
+        drawBarShadow(canvasWrapper, barPath, barData);
+        drawBar(canvasWrapper, barPath, barData, holder);
+      }
     }
   }
 
@@ -482,6 +489,164 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
     }
 
     return path;
+  }
+
+  List<ColorPath> generateNormalColorBarPaths(
+      Size viewSize,
+      LineChartBarData barData,
+      List<FlSpot> barSpots,
+      PaintHolder<LineChartData> holder,
+      {Path? appendToPath}) {
+    final path = appendToPath ?? Path();
+    final size = barSpots.length;
+
+    var temp = const Offset(0.0, 0.0);
+
+    // カラーの指定が含まれる場合は分割する
+    if (barSpots.any((s) => s.color != null)) {
+      final List<List<FlSpot>> chunkedSpots = [];
+      var chunkedIndex = 0;
+      Color? previousColor;
+      barSpots.asMap().forEach((index, spot) {
+        if (index == 0) {
+          previousColor = spot.color;
+        }
+        // カラーに変化がない場合
+        if (previousColor == spot.color) {
+          return;
+        }
+        chunkedSpots.add(barSpots.sublist(chunkedIndex, index));
+        chunkedIndex = index;
+        previousColor = spot.color;
+      });
+
+      return chunkedSpots.map((spot) {
+        final x = getPixelX(barSpots[0].x, viewSize, holder);
+        final y = getPixelY(barSpots[0].y, viewSize, holder);
+        if (appendToPath == null) {
+          path.moveTo(x, y);
+        } else {
+          path.lineTo(x, y);
+        }
+        for (var i = 1; i < size; i++) {
+          /// CurrentSpot
+          final current = Offset(
+            getPixelX(barSpots[i].x, viewSize, holder),
+            getPixelY(barSpots[i].y, viewSize, holder),
+          );
+
+          /// previous spot
+          final previous = Offset(
+            getPixelX(barSpots[i - 1].x, viewSize, holder),
+            getPixelY(barSpots[i - 1].y, viewSize, holder),
+          );
+
+          /// next point
+          final next = Offset(
+            getPixelX(barSpots[i + 1 < size ? i + 1 : i].x, viewSize, holder),
+            getPixelY(barSpots[i + 1 < size ? i + 1 : i].y, viewSize, holder),
+          );
+
+          final controlPoint1 = previous + temp;
+
+          /// if the isCurved is false, we set 0 for smoothness,
+          /// it means we should not have any smoothness then we face with
+          /// the sharped corners line
+          final smoothness = barData.isCurved ? barData.curveSmoothness : 0.0;
+          temp = ((next - previous) / 2) * smoothness;
+
+          if (barData.preventCurveOverShooting) {
+            if ((next - current).dy <=
+                    barData.preventCurveOvershootingThreshold ||
+                (current - previous).dy <=
+                    barData.preventCurveOvershootingThreshold) {
+              temp = Offset(temp.dx, 0);
+            }
+
+            if ((next - current).dx <=
+                    barData.preventCurveOvershootingThreshold ||
+                (current - previous).dx <=
+                    barData.preventCurveOvershootingThreshold) {
+              temp = Offset(0, temp.dy);
+            }
+          }
+
+          final controlPoint2 = current - temp;
+
+          path.cubicTo(
+            controlPoint1.dx,
+            controlPoint1.dy,
+            controlPoint2.dx,
+            controlPoint2.dy,
+            current.dx,
+            current.dy,
+          );
+        }
+        return ColorPath(path: path, color: spot.first.color);
+      }).toList();
+    }
+
+    final x = getPixelX(barSpots[0].x, viewSize, holder);
+    final y = getPixelY(barSpots[0].y, viewSize, holder);
+    if (appendToPath == null) {
+      path.moveTo(x, y);
+    } else {
+      path.lineTo(x, y);
+    }
+    for (var i = 1; i < size; i++) {
+      /// CurrentSpot
+      final current = Offset(
+        getPixelX(barSpots[i].x, viewSize, holder),
+        getPixelY(barSpots[i].y, viewSize, holder),
+      );
+
+      /// previous spot
+      final previous = Offset(
+        getPixelX(barSpots[i - 1].x, viewSize, holder),
+        getPixelY(barSpots[i - 1].y, viewSize, holder),
+      );
+
+      /// next point
+      final next = Offset(
+        getPixelX(barSpots[i + 1 < size ? i + 1 : i].x, viewSize, holder),
+        getPixelY(barSpots[i + 1 < size ? i + 1 : i].y, viewSize, holder),
+      );
+
+      final controlPoint1 = previous + temp;
+
+      /// if the isCurved is false, we set 0 for smoothness,
+      /// it means we should not have any smoothness then we face with
+      /// the sharped corners line
+      final smoothness = barData.isCurved ? barData.curveSmoothness : 0.0;
+      temp = ((next - previous) / 2) * smoothness;
+
+      if (barData.preventCurveOverShooting) {
+        if ((next - current).dy <= barData.preventCurveOvershootingThreshold ||
+            (current - previous).dy <=
+                barData.preventCurveOvershootingThreshold) {
+          temp = Offset(temp.dx, 0);
+        }
+
+        if ((next - current).dx <= barData.preventCurveOvershootingThreshold ||
+            (current - previous).dx <=
+                barData.preventCurveOvershootingThreshold) {
+          temp = Offset(0, temp.dy);
+        }
+      }
+
+      final controlPoint2 = current - temp;
+
+      path.cubicTo(
+        controlPoint1.dx,
+        controlPoint1.dy,
+        controlPoint2.dx,
+        controlPoint2.dy,
+        current.dx,
+        current.dy,
+      );
+    }
+
+    return [ColorPath(path: path)];
   }
 
   /// generates a `Step Line Chart` bar style path.
@@ -856,6 +1021,44 @@ class LineChartPainter extends AxisChartPainter<LineChartData> {
 
     barPath = barPath.toDashedPath(barData.dashArray);
     canvasWrapper.drawPath(barPath, _barPaint);
+  }
+
+  void drawColorBars(
+    CanvasWrapper canvasWrapper,
+    List<ColorPath> barPath,
+    LineChartBarData barData,
+    PaintHolder<LineChartData> holder,
+  ) {
+    if (!barData.show) {
+      return;
+    }
+    final viewSize = canvasWrapper.size;
+
+    for (final colorPath in barPath) {
+      _barPaint.strokeCap =
+          barData.isStrokeCapRound ? StrokeCap.round : StrokeCap.butt;
+      _barPaint.strokeJoin =
+          barData.isStrokeJoinRound ? StrokeJoin.round : StrokeJoin.miter;
+
+      final rectAroundTheLine = Rect.fromLTRB(
+        getPixelX(barData.mostLeftSpot.x, viewSize, holder),
+        getPixelY(barData.mostTopSpot.y, viewSize, holder),
+        getPixelX(barData.mostRightSpot.x, viewSize, holder),
+        getPixelY(barData.mostBottomSpot.y, viewSize, holder),
+      );
+      _barPaint.setColorOrGradient(
+        colorPath.color ?? barData.color,
+        barData.gradient,
+        rectAroundTheLine,
+      );
+
+      _barPaint.maskFilter = null;
+      _barPaint.strokeWidth = barData.barWidth;
+      _barPaint.transparentIfWidthIsZero();
+
+      final path = colorPath.path.toDashedPath(barData.dashArray);
+      canvasWrapper.drawPath(path, _barPaint);
+    }
   }
 
   @visibleForTesting

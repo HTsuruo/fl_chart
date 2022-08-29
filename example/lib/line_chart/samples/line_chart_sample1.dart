@@ -187,7 +187,7 @@ class _LineChart extends StatelessWidget {
           FlSpot(1, 1),
           FlSpot(3, 1.5),
           FlSpot(5, 1.4),
-          FlSpot(7, 3.4),
+          FlSpot(7, 3.4, color: Colors.red),
           FlSpot(10, 2),
           FlSpot(12, 2.2),
           FlSpot(13, 1.8),

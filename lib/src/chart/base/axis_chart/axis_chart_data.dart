@@ -370,19 +370,27 @@ class FlTitlesData with EquatableMixin {
       ];
 }
 
+class ColorPath {
+  ColorPath({required this.path, this.color});
+  final Path path;
+  final Color? color;
+}
+
 /// Represents a conceptual position in cartesian (axis based) space.
 class FlSpot with EquatableMixin {
   final double x;
   final double y;
+  final Color? color;
 
   /// [x] determines cartesian (axis based) horizontally position
   /// 0 means most left point of the chart
   ///
   /// [y] determines cartesian (axis based) vertically position
   /// 0 means most bottom point of the chart
-  const FlSpot(double x, double y)
+  const FlSpot(double x, double y, {Color? color})
       : x = x,
-        y = y;
+        y = y,
+        color = color;
 
   /// Copies current [FlSpot] to a new [FlSpot],
   /// and replaces provided values.
